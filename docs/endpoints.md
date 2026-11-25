@@ -1,51 +1,68 @@
-# 内置 IP 查询接口候选清单
+# 内置 IP 查询接口清单
 
 内置接口分两组：**境内**（服务器在中国大陆，通常命中直连规则）和**境外**（通常命中代理规则）。
 
-> **验证状态：全部未实测。** 本清单整理自各服务的公开资料与第三方文章，编写环境无法访问这些站点。字段路径与限额在写入代码前必须用 `scripts/check-endpoints.sh` 在目标 Mac 上逐个核对；免费接口随时可能改格式、加限流或下线。
+> **验证状态：** 2026-11 在一台 Mac 上用 `scripts/check-endpoints.sh` 实测过一轮 IPv4。那次测试中所有接口返回的都是同一个出口（北京移动），说明当时没有经过代理分流，所以只验证了**接口可用性和返回格式**，没有验证分流。IPv6 接口全部未验证通过。免费接口随时可能变化，发布前应再跑一次脚本。
 
 ## 境内
 
-| ID | 地址 | 返回 | 归属信息 | 限额 / 备注 |
+| ID | 地址 | 实测 | 返回字段 | 备注 |
 | --- | --- | --- | --- | --- |
-| `ipip` | `https://myip.ipip.net/json` | JSON | 国家、省、市、运营商（中文，数组形式） | 未公布限额 |
-| `baidu-qifu` | `https://qifu-api.baidubce.com/ip/local/geo/v1/district` | JSON | 国家、省、市、区、运营商（中文） | 未公布限额；非正式公开接口，稳定性存疑 |
-| `speedtest-cn` | `https://forge.speedtest.cn/api/location/info` | JSON | 国家、省、市、运营商（中文） | 未公布限额；属站点自用接口 |
-| `ip9` | `https://ip9.com.cn/get` | JSON | 国家、省、市、区、运营商 | 官网称每 IP 60 次 / 分钟 |
-| `pconline` | `https://whois.pconline.com.cn/ipJson.jsp?json=true` | JSON（**GBK 编码**） | 省、市、地址描述 | 需转码；无国家码 |
-| `ipw-v4` / `ipw-v6` | `https://4.ipw.cn`、`https://6.ipw.cn` | 纯文本 IP | 无 | 分别强制 IPv4 / IPv6 |
-| `3322` | `https://ip.3322.net` | 纯文本 IP | 无 | 仅 IPv4 |
+| `ipip` | `https://myip.ipip.net/json` | ✅ 0.4s | `data.ip`；`data.location` 为数组：`[国家, 省, 市, 区, 运营商]`，全中文 | 最快；无国家码，需中文名→国家码映射 |
+| `ip9` | `https://ip9.com.cn/get` | ✅ 2.2s | `data.ip`、`data.country_code`（**小写** `cn`）、`data.prov`、`data.city`、`data.isp` | 字段最全，有国家码；偏慢；官网称每 IP 60 次 / 分钟 |
+| `pconline` | `https://whois.pconline.com.cn/ipJson.jsp?json=true` | ✅ 0.8s | `ip`、`pro`、`city`、`addr`（含运营商简称） | 响应前有多行空白需先 trim；**无国家字段**；按 GBK 转码 |
+| ~~`baidu-qifu`~~ | `qifu-api.baidubce.com/...` | ❌ 404 | | 已下线，移除 |
+| ~~`speedtest-cn`~~ | `forge.speedtest.cn/...` | ❌ 404 | | 已下线，移除 |
+| ~~`3322`~~ | `https://ip.3322.net` | ❌ 证书过期 | | 移除 |
+| ~~`ipw-v4` / `ipw-v6`~~ | `4.ipw.cn` / `6.ipw.cn` | ❌ 域名无法解析 | | 移除 |
 
-**建议默认**：主 `ipip`，备用 `ip9`；IPv6 用 `ipw-v6`。
+**默认**：主 `ipip`，备用 `ip9`，再备用 `pconline`。
 
 ## 境外
 
-| ID | 地址 | 返回 | 归属信息 | 限额 / 备注 |
+| ID | 地址 | 实测 | 返回字段 | 备注 |
 | --- | --- | --- | --- | --- |
-| `cloudflare` | `https://www.cloudflare.com/cdn-cgi/trace` | `key=value` 文本 | 仅国家码（`loc`） | 无公开限额；无运营商信息 |
-| `ipinfo` | `https://ipinfo.io/json` | JSON | 国家码、地区、城市、`org`（含 ASN） | 无 Token 时约 1000 次 / 天，且**按出口 IP 共享**——共享代理节点上容易被别人用完 |
-| `ipinfo-lite` | `https://api.ipinfo.io/lite/me?token=…` | JSON | 国家码、ASN、组织（无城市） | 需免费 Token；官方称不限次数 |
-| `ip-api` | `http://ip-api.com/json` | JSON | 国家码、地区、城市、ISP、组织、ASN | 45 次 / 分钟；免费版**仅 HTTP**、限非商业用途 |
-| `ipapi-co` | `https://ipapi.co/json` | JSON | 国家码、地区、城市、组织、ASN | 第三方资料称约 1000 次 / 天 |
-| `ip-sb` | `https://api.ip.sb/geoip` | JSON | 国家码、组织、ISP、ASN | 未公布限额 |
-| `ipwhois` | `https://ipwho.is/` | JSON | 国家码、地区、城市、ISP、组织、ASN | 未公布确切限额 |
-| `ipify-v4` / `ipify-v6` | `https://api.ipify.org`、`https://api6.ipify.org` | 纯文本 IP | 无 | 分别强制 IPv4 / IPv6 |
+| `cloudflare` | `https://www.cloudflare.com/cdn-cgi/trace` | ✅ 1.1s | `key=value` 文本：`ip`、`loc`（国家码） | 无配额压力，适合高频；只有国家码 |
+| `ip-sb` | `https://api.ip.sb/geoip` | ✅ 1.9s | `ip`、`country_code`、`region`、`city`、`isp`、`organization`、`asn`（数字） | 运营商 / ASN 齐全 |
+| `ipwhois` | `https://ipwho.is/` | ✅ 0.9s | `ip`、`success`、`country_code`、`region`、`city`，运营商在 `connection` 对象内 | `connection` 字段在本次输出截断处之后，**未亲见**，实现时需复核 |
+| `ipinfo` | `https://ipinfo.io/json` | ✅ 1.6s | `ip`、`country`、`region`、`city`、`org`（形如 `AS56048 China Mobile ...`） | 无 Token 约 1000 次 / 天，按出口 IP 共享；最小间隔设 120 秒 |
+| `ip-api` | `http://ip-api.com/json` | ✅ 0.4s | `query`（即 IP）、`countryCode`、`regionName`、`city`、`isp`、`org`、`as`；`status` 为 `success` 才有效 | 仅 HTTP，需 ATS 例外，默认不启用；45 次 / 分钟 |
+| ~~`ipapi-co`~~ | `https://ipapi.co/json` | ❌ 403 | | 被 Cloudflare 人机验证拦截，移除 |
+| ~~`ipify-v4`~~ | `https://api.ipify.org` | ❌ 连接失败 | | 在测试网络下不可达，移除 |
 
-**建议默认**：主 `cloudflare`（无配额压力，适合高频），需要运营商 / ASN 时配 `ip-sb` 或 `ipwhois`；IPv6 用 `ipify-v6`。
+**默认**：主 `cloudflare`；规则用到运营商 / ASN 时改为主 `ip-sb`、备用 `ipwhois`、再备用 `ipinfo`。
 
-## 对设计的三点影响
+## IPv6（待验证）
 
-**1. 每日配额与默认间隔冲突。** 60 秒间隔 = 每个检测点每天 1440 次，超过 `ipinfo`（无 Token）和 `ipapi-co` 的约 1000 次 / 天。处理方式：
+上一轮的两个 IPv6 接口都无法解析。`api6.ipify.org` 解析失败也可能是测试机没有 IPv6 地址。新的候选已加入脚本，需在**有 IPv6 的网络**下重测：
 
-- 每个内置接口带一个“最小间隔”属性，检测点间隔不得低于它（上述两个设为 120 秒）
-- 默认主接口只选没有每日配额压力的（`ipip`、`cloudflare`）
+| ID | 地址 | 组 |
+| --- | --- | --- |
+| `ident-v6` | `https://v6.ident.me` | 境外 |
+| `icanhazip-v6` | `https://ipv6.icanhazip.com` | 境外 |
+| `ipify-v64` | `https://api64.ipify.org` | 境外（双栈，优先 v6） |
 
-**2. 境内接口返回中文且没有国家码。** 规则里的“国家码属于 `CN`”无法直接匹配“中国”。两种做法，建议 MVP 用前者：
+测试机自身有无 IPv6 可以先确认：
 
-- 内置一张常见国家中文名 → 二位码的映射表，匹配不上时国家码留空，仍可用关键字规则匹配原始响应
-- 只取 IP，再统一交给归属地解析（在线服务或 M2 的离线库）
+```bash
+curl -6 -sS -m 5 https://v6.ident.me
+```
 
-**3. `ip-api` 只有 HTTP。** macOS 默认拦截明文 HTTP，需为该域名单独加传输安全例外；且明文响应可被中间人篡改，不适合作为默认接口，仅作可选项。
+境内暂无可用的 IPv6 候选。IPv6 检测点 MVP 先只提供境外接口。
+
+## 解析要点
+
+以下差异需要在“响应格式 → 统一结果”的解析层处理：
+
+| 问题 | 处理 |
+| --- | --- |
+| 国家码大小写不一（`ip9` 为小写） | 统一转大写 |
+| `ipip` 只有中文国家名，`pconline` 连国家都没有 | 中文国家名 → 国家码映射；`pconline` 若省份字段非空则视为 `CN` |
+| IP 字段名不一（`ip` / `query` / `data.ip`） | 每个内置接口声明自己的字段路径 |
+| 成功标志不一（`ret` / `status` / `success`） | 每个接口声明成功条件，不满足判“检测失败” |
+| 运营商字段格式不一（`org` 带 `AS` 前缀、`asn` 为纯数字） | 统一拆成 `asn`（数字）与 `org`（名称） |
+| `cloudflare` 是 `key=value` 文本 | 单独的文本解析器 |
+| `pconline` 前导空白、GBK 编码 | 先转码再 trim |
 
 ## 分流提醒
 
@@ -55,7 +72,5 @@
 
 - [IPinfo：免费计划的用量限制](https://support.ipinfo.io/hc/en-us/articles/30792535492626-What-Is-the-Usage-Limit-for-the-Free-Plan)
 - [IPinfo：无账号公共接口与免费计划的区别](https://support.ipinfo.io/hc/en-us/articles/30792479436562-What-Is-the-Difference-Between-Using-the-Authenticated-Free-Plan-and-the-Public-API-With-No-Account)
-- [IPinfo Lite 介绍](https://ipinfo.io/blog/ipinfo-lite-free-accurate-unlimited-ip-data)
-- [Free IP Geolocation APIs Compared (2026)](https://geo.kamero.ai/blog/free-ip-geolocation-api-comparison-2026)
 - [IP9.COM.CN](https://www.ip9.com.cn/)
 - [ihmily/ip-info-api：免费 IP 接口汇总](https://github.com/ihmily/ip-info-api)

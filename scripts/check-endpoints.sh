@@ -6,21 +6,16 @@ set -u
 
 ENDPOINTS=(
   "cn|ipip|https://myip.ipip.net/json"
-  "cn|baidu-qifu|https://qifu-api.baidubce.com/ip/local/geo/v1/district"
-  "cn|speedtest-cn|https://forge.speedtest.cn/api/location/info"
-  "cn|pconline|https://whois.pconline.com.cn/ipJson.jsp?json=true"
   "cn|ip9|https://ip9.com.cn/get"
-  "cn|ipw-v4|https://4.ipw.cn"
-  "cn|ipw-v6|https://6.ipw.cn"
-  "cn|3322|https://ip.3322.net"
+  "cn|pconline|https://whois.pconline.com.cn/ipJson.jsp?json=true"
   "global|cloudflare|https://www.cloudflare.com/cdn-cgi/trace"
-  "global|ipinfo|https://ipinfo.io/json"
-  "global|ip-api|http://ip-api.com/json"
-  "global|ipapi-co|https://ipapi.co/json"
   "global|ip-sb|https://api.ip.sb/geoip"
   "global|ipwhois|https://ipwho.is/"
-  "global|ipify-v4|https://api.ipify.org"
-  "global|ipify-v6|https://api6.ipify.org"
+  "global|ipinfo|https://ipinfo.io/json"
+  "global|ip-api|http://ip-api.com/json"
+  "v6|ident-v6|https://v6.ident.me"
+  "v6|icanhazip-v6|https://ipv6.icanhazip.com"
+  "v6|ipify-v64|https://api64.ipify.org"
 )
 
 for entry in "${ENDPOINTS[@]}"; do
@@ -31,9 +26,9 @@ for entry in "${ENDPOINTS[@]}"; do
   printf '\n=== [%s] %s  %s\n    %s\n' "$group" "$id" "$url" "$meta"
   # pconline 返回 GBK，其余为 UTF-8
   if [ "$id" = "pconline" ]; then
-    iconv -f gbk -t utf-8 -c "$body_file" | head -c 400
+    iconv -f gbk -t utf-8 -c "$body_file" | head -c 1500
   else
-    head -c 400 "$body_file"
+    head -c 1500 "$body_file"
   fi
   echo
   rm -f "$body_file"
