@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Swift 版本
         run: swift --version
@@ -28,7 +28,7 @@ jobs:
           scripts/build-app.sh "$VERSION"
 
       - name: 上传构建产物
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: NetMonitor
           path: build/*.zip
