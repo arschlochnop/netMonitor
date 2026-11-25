@@ -91,7 +91,7 @@ public struct Endpoint: Codable, Identifiable, Hashable, Sendable {
     public var isBuiltin: Bool
 
     public init(id: String, name: String, group: EndpointGroup, url: String, kind: ResponseKind,
-                fields: FieldMap = FieldMap(), ipVersion: IPVersion = .v4, minIntervalSeconds: Int = 10,
+                fields: FieldMap = FieldMap(), ipVersion: IPVersion = .v4, minIntervalSeconds: Int = 1,
                 encoding: TextEncoding = .utf8, impliedCountryCode: String? = nil,
                 summary: String = "", isBuiltin: Bool = false) {
         self.id = id

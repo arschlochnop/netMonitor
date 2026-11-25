@@ -91,13 +91,33 @@ public struct URLSessionFetcher: HTTPFetching {
     }
 }
 
+/// 归属地补全结果缓存：同一 IP 的归属不会频繁变化，避免每秒检测时反复请求补全服务
+public actor GeoCache {
+    private var entries: [String: (geo: GeoInfo, at: Date)] = [:]
+    private let ttl: TimeInterval
+
+    public init(ttl: TimeInterval = 3600) { self.ttl = ttl }
+
+    public func get(_ ip: String, now: Date = Date()) -> GeoInfo? {
+        guard let e = entries[ip], now.timeIntervalSince(e.at) < ttl else { return nil }
+        return e.geo
+    }
+
+    public func set(_ ip: String, _ geo: GeoInfo, now: Date = Date()) {
+        if entries.count > 256 { entries = entries.filter { now.timeIntervalSince($0.value.at) < ttl } }
+        entries[ip] = (geo, now)
+    }
+}
+
 public struct Prober: Sendable {
     public var fetcher: HTTPFetching
     public var timeout: TimeInterval
+    public var cache: GeoCache?
 
-    public init(fetcher: HTTPFetching = URLSessionFetcher(), timeout: TimeInterval = 8) {
+    public init(fetcher: HTTPFetching = URLSessionFetcher(), timeout: TimeInterval = 8, cache: GeoCache? = nil) {
         self.fetcher = fetcher
         self.timeout = timeout
+        self.cache = cache
     }
 
     /// 依次尝试主接口与备用接口，拿到 IP 后补全归属地并按规则判定。
@@ -122,7 +142,10 @@ public struct Prober: Sendable {
                 attempts.append(EndpointAttempt(endpointID: id, endpointName: endpoint.name, failure: nil,
                                                 duration: now().timeIntervalSince(attemptStart)))
                 if !geo.hasLocation, let enrichment {
-                    if let extra = try? await query(enrichment, ip: geo.ip) {
+                    if let cached = await cache?.get(geo.ip) {
+                        geo = ResponseParser.merge(geo, enrichment: cached)
+                    } else if let extra = try? await query(enrichment, ip: geo.ip) {
+                        await cache?.set(geo.ip, extra)
                         geo = ResponseParser.merge(geo, enrichment: extra)
                     }
                 }

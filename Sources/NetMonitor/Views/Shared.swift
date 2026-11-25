@@ -123,3 +123,107 @@ struct OutcomeSummary: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+/// 整数输入框：只能输入数字，超出范围时提示并在提交时拉回范围内；右侧带步进按钮
+@MainActor
+struct IntegerField: View {
+    var title: String
+    @Binding var value: Int
+    var range: ClosedRange<Int>
+    var unit: String
+    var step: Int = 1
+
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        LabeledContent {
+            VStack(alignment: .trailing, spacing: 2) {
+                HStack(spacing: 6) {
+                    TextField(title, text: $text)
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                        .focused($focused)
+                        .onSubmit(commit)
+                    Text(unit).foregroundColor(.secondary)
+                    Stepper(title, value: Binding(
+                        get: { value },
+                        set: { newValue in
+                            value = Limits.clamp(newValue, range)
+                            text = String(value)
+                        }
+                    ), in: range, step: step)
+                    .labelsHidden()
+                }
+                Text(hint.text)
+                    .font(.caption)
+                    .foregroundColor(hint.isError ? ProbeStatus.mismatch.color : .secondary)
+            }
+        } label: {
+            Text(title)
+        }
+        .onAppear { text = String(value) }
+        .onChange(of: value) { newValue in
+            if !focused { text = String(newValue) }
+        }
+        .onChange(of: text) { newText in
+            // 只保留数字：不允许小数、负号和其他字符
+            let digits = newText.filter { $0.isASCII && $0.isNumber }
+            if digits != newText {
+                text = digits
+                return
+            }
+            if let n = Int(digits), range.contains(n) { value = n }
+        }
+        .onChange(of: focused) { isFocused in
+            if !isFocused { commit() }
+        }
+    }
+
+    private var hint: (text: String, isError: Bool) {
+        let rangeText = "范围 \(range.lowerBound)–\(range.upperBound) \(unit)"
+        guard let n = Int(text) else {
+            return text.isEmpty ? ("请输入整数，\(rangeText)", true) : ("数值过大，\(rangeText)", true)
+        }
+        if !range.contains(n) { return ("超出范围，\(rangeText)", true) }
+        return (rangeText, false)
+    }
+
+    private func commit() {
+        let n: Int
+        if let parsed = Int(text) {
+            n = parsed
+        } else {
+            // 空输入恢复原值；数字过长溢出视为上限
+            n = text.isEmpty ? value : range.upperBound
+        }
+        value = Limits.clamp(n, range)
+        text = String(value)
+    }
+}
+
+/// 可关闭的整数设置：关闭时为 nil
+@MainActor
+struct OptionalIntegerField: View {
+    var toggleTitle: String
+    var title: String
+    @Binding var value: Int?
+    var defaultValue: Int
+    var range: ClosedRange<Int>
+    var unit: String
+    var step: Int = 1
+
+    var body: some View {
+        Toggle(toggleTitle, isOn: Binding(
+            get: { value != nil },
+            set: { value = $0 ? (value ?? defaultValue) : nil }
+        ))
+        if value != nil {
+            IntegerField(title: title, value: Binding(
+                get: { value ?? defaultValue },
+                set: { value = $0 }
+            ), range: range, unit: unit, step: step)
+        }
+    }
+}

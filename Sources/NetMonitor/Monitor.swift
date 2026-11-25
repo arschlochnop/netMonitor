@@ -39,6 +39,7 @@ final class Monitor: ObservableObject {
     private var graceUntil: Date?
     private var started = false
     private var lastPrune = Date.distantPast
+    private let geoCache = GeoCache()
 
     init() {
         notifier = Notifier()
@@ -82,7 +83,7 @@ final class Monitor: ObservableObject {
         }
         notifier.setup()
 
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
         }
 
@@ -156,7 +157,7 @@ final class Monitor: ObservableObject {
         rt.lastRun = Date()
         runtimes[probe.id] = rt
 
-        let prober = Prober(timeout: TimeInterval(config.timeoutSeconds))
+        let prober = Prober(timeout: TimeInterval(config.timeoutSeconds), cache: geoCache)
         let endpoints = config.endpointsByID
         let enrichment = enrichmentEndpoint
         let v6 = supportsIPv6
@@ -168,13 +169,13 @@ final class Monitor: ObservableObject {
 
     /// 设置页「测试一次」：只返回结果，不影响状态与提醒
     func test(_ probe: Probe) async -> CheckOutcome {
-        let prober = Prober(timeout: TimeInterval(config.timeoutSeconds))
+        let prober = Prober(timeout: TimeInterval(config.timeoutSeconds), cache: geoCache)
         return await prober.check(probe: probe, endpoints: config.endpointsByID,
                                   enrichment: enrichmentEndpoint, supportsIPv6: supportsIPv6)
     }
 
     func testEndpoint(_ endpoint: Endpoint) async -> Result<GeoInfo, CheckFailure> {
-        let prober = Prober(timeout: TimeInterval(config.timeoutSeconds))
+        let prober = Prober(timeout: TimeInterval(config.timeoutSeconds), cache: geoCache)
         do {
             return .success(try await prober.query(endpoint))
         } catch let e as CheckFailureError {
@@ -210,7 +211,7 @@ final class Monitor: ObservableObject {
         let settings = AlertPolicySettings(
             debounce: probe.alert.debounce,
             notifyRecovery: probe.alert.notifyRecovery,
-            repeatInterval: config.repeatAlertMinutes.map { TimeInterval($0 * 60) },
+            repeatInterval: config.repeatAlertSeconds.map { TimeInterval($0) },
             failureAlertAfter: config.failureAlertAfter
         )
         let events = AlertPolicy.process(

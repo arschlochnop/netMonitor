@@ -130,3 +130,44 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(HistoryFile.csv(kept).contains("\"x, \"\"y\"\"\""))
     }
 }
+
+final class LimitsTests: XCTestCase {
+    func testSanitizeClampsOutOfRangeValues() {
+        var config = AppConfig.makeDefault()
+        config.defaultIntervalSeconds = 0
+        config.timeoutSeconds = 999
+        config.repeatAlertSeconds = 5
+        config.historyRetentionDays = 10_000
+        config.probes[0].intervalSeconds = 99_999
+        config.probes[0].alert.debounce = 0
+        let s = config.sanitized()
+        XCTAssertEqual(s.defaultIntervalSeconds, 1)
+        XCTAssertEqual(s.timeoutSeconds, 60)
+        XCTAssertEqual(s.repeatAlertSeconds, 60)
+        XCTAssertEqual(s.historyRetentionDays, 365)
+        XCTAssertEqual(s.probes[0].intervalSeconds, 3600)
+        XCTAssertEqual(s.probes[0].alert.debounce, 1)
+    }
+
+    func testOneSecondIntervalAllowedForUnlimitedEndpoints() {
+        var config = AppConfig()
+        config.defaultIntervalSeconds = 1
+        XCTAssertEqual(config.effectiveInterval(for: Probe(name: "x", endpointID: "cloudflare")), 1)
+        XCTAssertEqual(config.effectiveInterval(for: Probe(name: "x", endpointID: "ipinfo")), 120)
+    }
+
+    func testLegacyRepeatMinutesMigratesToSeconds() throws {
+        let config = try JSONDecoder().decode(AppConfig.self, from: Data(#"{"repeatAlertMinutes":10}"#.utf8))
+        XCTAssertEqual(config.repeatAlertSeconds, 600)
+    }
+
+    func testEnrichmentIsCached() async {
+        let cache = GeoCache()
+        await cache.set("2001:db8::1", GeoInfo(ip: "2001:db8::1", countryCode: "JP"))
+        let fetcher = FakeFetcher(responses: ["https://v6.ident.me": .success(("2001:db8::1", 200))])
+        let endpoints = Dictionary(uniqueKeysWithValues: EndpointCatalog.builtin.map { ($0.id, $0) })
+        let outcome = await Prober(fetcher: fetcher, cache: cache)
+            .check(probe: Probe(name: "v6", endpointID: "ident-v6"), endpoints: endpoints, enrichment: EndpointCatalog.enrichment)
+        XCTAssertEqual(outcome.geo?.countryCode, "JP", "命中缓存时不应再请求补全服务（假网络层没有该地址）")
+    }
+}

@@ -233,12 +233,15 @@ struct ProbeEditorView: View {
                     LabeledContent("请求域名", value: host)
                 }
 
-                Picker("检测间隔", selection: $probe.intervalSeconds) {
-                    Text("跟随全局（\(monitor.config.defaultIntervalSeconds) 秒）").tag(Int?.none)
-                    ForEach([30, 60, 120, 300, 600], id: \.self) { s in
-                        Text(s < 60 ? "\(s) 秒" : "\(s / 60) 分钟").tag(Int?.some(s))
-                    }
-                }
+                OptionalIntegerField(
+                    toggleTitle: probe.intervalSeconds == nil
+                        ? "单独设置检测间隔（当前跟随全局 \(monitor.config.defaultIntervalSeconds) 秒）"
+                        : "单独设置检测间隔",
+                    title: "检测间隔",
+                    value: $probe.intervalSeconds,
+                    defaultValue: monitor.config.defaultIntervalSeconds,
+                    range: Limits.intervalSeconds, unit: "秒"
+                )
                 let effective = monitor.config.effectiveInterval(for: probe)
                 if effective != (probe.intervalSeconds ?? monitor.config.defaultIntervalSeconds) {
                     Text("所选接口有配额限制，实际间隔为 \(effective) 秒。").font(.caption).foregroundColor(.secondary)
@@ -288,7 +291,8 @@ struct ProbeEditorView: View {
             }
 
             Section {
-                Stepper("连续 \(probe.alert.debounce) 次不符合才提醒", value: $probe.alert.debounce, in: 1...10)
+                IntegerField(title: "连续不符合多少次才提醒", value: $probe.alert.debounce,
+                             range: Limits.debounce, unit: "次")
                 Toggle("系统通知", isOn: $probe.alert.notify)
                 Toggle("强提醒弹窗（置顶，需手动关闭）", isOn: $probe.alert.popup)
                 Toggle("提示音", isOn: $probe.alert.sound)
@@ -349,31 +353,26 @@ struct GeneralSettingsView: View {
             }
 
             Section("检测") {
-                Picker("默认检测间隔", selection: $monitor.config.defaultIntervalSeconds) {
-                    ForEach([30, 60, 120, 300], id: \.self) { s in
-                        Text(s < 60 ? "\(s) 秒" : "\(s / 60) 分钟").tag(s)
-                    }
-                }
-                Picker("请求超时", selection: $monitor.config.timeoutSeconds) {
-                    ForEach([5, 8, 15], id: \.self) { Text("\($0) 秒").tag($0) }
+                IntegerField(title: "默认检测间隔", value: $monitor.config.defaultIntervalSeconds,
+                             range: Limits.intervalSeconds, unit: "秒")
+                IntegerField(title: "请求超时", value: $monitor.config.timeoutSeconds,
+                             range: Limits.timeoutSeconds, unit: "秒")
+                if monitor.config.timeoutSeconds > monitor.config.defaultIntervalSeconds {
+                    Text("检测间隔短于请求超时：同一检测点上一次检测结束前不会发起下一次，网络卡顿时实际间隔会被拉长到超时时长。")
+                        .font(.caption).foregroundColor(.secondary)
                 }
                 Toggle("网络变化（切换 Wi‑Fi、VPN 上下线）时立即检测", isOn: $monitor.config.checkOnNetworkChange)
-                Picker("唤醒后等待网络恢复再判定", selection: $monitor.config.wakeGraceSeconds) {
-                    Text("不等待").tag(0)
-                    Text("10 秒").tag(10)
-                    Text("30 秒").tag(30)
-                }
+                IntegerField(title: "唤醒后等待网络恢复再判定", value: $monitor.config.wakeGraceSeconds,
+                             range: Limits.wakeGraceSeconds, unit: "秒", step: 5)
             }
 
             Section("提醒") {
-                Picker("持续异常时重复提醒", selection: $monitor.config.repeatAlertMinutes) {
-                    Text("不重复").tag(Int?.none)
-                    ForEach([10, 30, 60], id: \.self) { Text("每 \($0) 分钟").tag(Int?.some($0)) }
-                }
-                Picker("检测失败时提醒", selection: $monitor.config.failureAlertAfter) {
-                    Text("从不").tag(Int?.none)
-                    ForEach([3, 5, 10], id: \.self) { Text("连续 \($0) 次后").tag(Int?.some($0)) }
-                }
+                OptionalIntegerField(toggleTitle: "持续异常时重复提醒", title: "重复提醒间隔",
+                                     value: $monitor.config.repeatAlertSeconds, defaultValue: 600,
+                                     range: Limits.repeatAlertSeconds, unit: "秒", step: 60)
+                OptionalIntegerField(toggleTitle: "检测失败时提醒", title: "连续失败多少次后提醒",
+                                     value: $monitor.config.failureAlertAfter, defaultValue: 3,
+                                     range: Limits.failureAlertAfter, unit: "次")
                 NotificationStatusRow(notifier: monitor.notifier)
             }
 
@@ -389,9 +388,8 @@ struct GeneralSettingsView: View {
             }
 
             Section("数据") {
-                Picker("历史记录保留", selection: $monitor.config.historyRetentionDays) {
-                    ForEach([7, 30, 90], id: \.self) { Text("\($0) 天").tag($0) }
-                }
+                IntegerField(title: "历史记录保留", value: $monitor.config.historyRetentionDays,
+                             range: Limits.historyRetentionDays, unit: "天")
                 LabeledContent("配置文件（JSON）") {
                     HStack {
                         Button("导入…") { importConfig() }
@@ -476,7 +474,7 @@ struct EndpointsSettingsView: View {
                                     HStack(spacing: 6) {
                                         Text(e.name).fontWeight(.medium)
                                         Tag(text: e.ipVersion.title)
-                                        if e.minIntervalSeconds > 10 { Tag(text: "≥\(e.minIntervalSeconds) 秒") }
+                                        if e.minIntervalSeconds > 1 { Tag(text: "≥\(e.minIntervalSeconds) 秒") }
                                     }
                                     Text(e.url).font(.caption).foregroundColor(.secondary).textSelection(.enabled)
                                     Text(e.summary).font(.caption).foregroundColor(.secondary)
