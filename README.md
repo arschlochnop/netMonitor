@@ -38,13 +38,13 @@ macOS 菜单栏工具：同时向多个境内、境外的 IP 查询接口发请�
 在终端执行，脚本会自动找到“下载”文件夹里最新的安装包，解压、复制到“应用程序”、解除隔离标记并启动：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/arschlochnop/netMonitor/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/arschlochnop/netMonitor/HEAD/scripts/install.sh | bash
 ```
 
 安装包不在“下载”文件夹时，把路径传给脚本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/arschlochnop/netMonitor/main/scripts/install.sh | bash -s -- ~/Desktop/NetMonitor.zip
+curl -fsSL https://raw.githubusercontent.com/arschlochnop/netMonitor/HEAD/scripts/install.sh | bash -s -- ~/Desktop/NetMonitor.zip
 ```
 
 **方法 B：手动安装 + 终端放行**
