@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-public enum CheckFailure: Hashable, Sendable {
+public enum CheckFailure: Error, Hashable, Sendable {
     /// 本机没有 IPv6 出口（解析不到 AAAA 记录，或无路由立即被拒）
     case noIPv6
     case timeout
