@@ -47,8 +47,39 @@ public enum ResponseParser {
         var info: GeoInfo
         switch endpoint.kind {
         case .plainIP:
-            let ip = text.split(whereSeparator: { $0.isNewline }).first.map(String.init) ?? text
-            info = GeoInfo(ip: ip.trimmingCharacters(in: .whitespaces), raw: text)
+            // 取第一行的第一段；像 "1.2.3.4 JP" 这样后面跟着国家码的也能识别
+            let firstLine = text.split(whereSeparator: { $0.isNewline }).first.map(String.init) ?? text
+            let ip = firstLine.split(whereSeparator: { $0.isWhitespace || $0 == "," }).first.map(String.init) ?? firstLine
+            info = GeoInfo(ip: ip, raw: text)
+            let rest = text.replacingOccurrences(of: ip, with: " ")
+            if rest.count <= 200 { info.countryCode = TextExtractor.countryCode(in: rest) }
+
+        case .text:
+            let f = endpoint.fields
+            let ip: String
+            if let pattern = f.ip {
+                guard let v = TextExtractor.capture(pattern, in: text) else { throw ParseError.missingIP }
+                ip = v
+            } else {
+                guard let v = TextExtractor.firstIP(in: text) else { throw ParseError.missingIP }
+                ip = v
+            }
+            let countryCode: String?
+            if let pattern = f.countryCode {
+                countryCode = TextExtractor.capture(pattern, in: text)
+            } else {
+                countryCode = TextExtractor.countryCode(in: text.replacingOccurrences(of: ip, with: " "))
+            }
+            info = GeoInfo(
+                ip: ip,
+                countryCode: countryCode,
+                country: f.country.flatMap { TextExtractor.capture($0, in: text) },
+                region: f.region.flatMap { TextExtractor.capture($0, in: text) },
+                city: f.city.flatMap { TextExtractor.capture($0, in: text) },
+                org: f.org.flatMap { TextExtractor.capture($0, in: text) },
+                raw: text
+            )
+            if let pattern = f.asn, let v = TextExtractor.capture(pattern, in: text) { applyASN(v, to: &info) }
 
         case .keyValue:
             var map: [String: String] = [:]
@@ -174,6 +205,46 @@ public enum ResponseParser {
     static func clean(_ s: String?) -> String? {
         guard let t = s?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
         return t
+    }
+}
+
+/// 从任意文本中提取字段
+public enum TextExtractor {
+    /// 正则匹配，有捕获组时取第 1 组，否则取整个匹配；正则无效或无匹配返回 nil
+    public static func capture(_ pattern: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, options: [], range: range) else { return nil }
+        let group = match.numberOfRanges > 1 && match.range(at: 1).location != NSNotFound ? 1 : 0
+        guard let r = Range(match.range(at: group), in: text) else { return nil }
+        let value = text[r].trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    /// 文本中出现的第一个合法 IPv4 / IPv6 地址
+    public static func firstIP(in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "[0-9A-Fa-f:.]{3,}") else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        for match in regex.matches(in: text, options: [], range: range) {
+            guard let r = Range(match.range, in: text) else { continue }
+            let candidate = text[r].trimmingCharacters(in: CharacterSet(charactersIn: ".:"))
+            if IPAddress.isValid(candidate) { return candidate }
+        }
+        return nil
+    }
+
+    private static let isoRegions: Set<String> = Set(Locale.isoRegionCodes)
+
+    /// 文本中第一个独立出现、且是合法 ISO 3166 二位码的大写词，如 "1.2.3.4 JP" 中的 JP
+    public static func countryCode(in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "(?<![A-Za-z])[A-Z]{2}(?![A-Za-z])") else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        for match in regex.matches(in: text, options: [], range: range) {
+            guard let r = Range(match.range, in: text) else { continue }
+            let code = String(text[r])
+            if isoRegions.contains(code) { return code }
+        }
+        return nil
     }
 }
 

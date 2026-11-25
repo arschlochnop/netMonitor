@@ -16,6 +16,7 @@ BIN_DIR=$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/NetMonitor" "$APP/Contents/MacOS/NetMonitor"
+cp Resources/AppIcon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 sed -e "s/__VERSION__/$VERSION/" -e "s/__BUILD__/$BUILD/" Resources/Info.plist > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist"
 

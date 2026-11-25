@@ -121,6 +121,48 @@ final class ParserTests: XCTestCase {
         XCTAssertThrowsError(try ResponseParser.parse(text: "<html>", endpoint: endpoint("ident-v6")))
     }
 
+    private func custom(_ kind: ResponseKind, _ fields: FieldMap = FieldMap()) -> Endpoint {
+        Endpoint(id: "custom-test", name: "自建", group: .custom, url: "https://example.invalid", kind: kind, fields: fields)
+    }
+
+    func testPlainIPFollowedByCountryCode() throws {
+        // 自建接口的真实格式：IP 后跟国家码
+        let geo = try ResponseParser.parse(text: "203.0.113.88 JP\n", endpoint: custom(.plainIP))
+        XCTAssertEqual(geo.ip, "203.0.113.88")
+        XCTAssertEqual(geo.countryCode, "JP")
+        XCTAssertTrue(geo.hasLocation)
+    }
+
+    func testTextAutoDetect() throws {
+        let geo = try ResponseParser.parse(text: "当前 IP：203.0.113.88 来自 JP", endpoint: custom(.text))
+        XCTAssertEqual(geo.ip, "203.0.113.88")
+        XCTAssertEqual(geo.countryCode, "JP")
+    }
+
+    func testTextAutoDetectIPv6() throws {
+        let geo = try ResponseParser.parse(text: "addr=2001:db8::1, loc=US", endpoint: custom(.text))
+        XCTAssertEqual(geo.ip, "2001:db8::1")
+        XCTAssertEqual(geo.countryCode, "US")
+    }
+
+    func testTextRegexFields() throws {
+        let fields = FieldMap(countryCode: #"country=(\w+)"#, asn: #"asn=(AS\d+)"#, org: #"isp=([^;]+)"#)
+        let geo = try ResponseParser.parse(text: "ip=203.0.113.88; country=jp; asn=AS2516; isp=KDDI Corp",
+                                           endpoint: custom(.text, fields))
+        XCTAssertEqual(geo.countryCode, "JP")
+        XCTAssertEqual(geo.asn, 2516)
+        XCTAssertEqual(geo.org, "KDDI Corp")
+    }
+
+    func testTextIgnoresNonCountryUppercaseWords() throws {
+        let geo = try ResponseParser.parse(text: "OK 203.0.113.88", endpoint: custom(.text))
+        XCTAssertNil(geo.countryCode, "OK 不是国家码")
+    }
+
+    func testTextWithoutIPFails() {
+        XCTAssertThrowsError(try ResponseParser.parse(text: "<html>blocked</html>", endpoint: custom(.text)))
+    }
+
     func testSplitASN() {
         XCTAssertEqual(ResponseParser.splitASN("AS4760 HKT").0, 4760)
         XCTAssertEqual(ResponseParser.splitASN("AS4760 HKT").1, "HKT")

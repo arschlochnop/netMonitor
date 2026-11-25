@@ -26,12 +26,15 @@ public enum ResponseKind: String, Codable, CaseIterable, Hashable, Sendable {
     case keyValue
     /// JSON，字段用点分路径定位，数组下标写数字，如 `data.location.0`
     case json
+    /// 任意文本，字段用正则提取（取第 1 个捕获组）；IP 与国家码留空时自动识别
+    case text
 
     public var title: String {
         switch self {
         case .plainIP: return "纯文本 IP"
         case .keyValue: return "key=value 文本"
         case .json: return "JSON"
+        case .text: return "文本（正则提取）"
         }
     }
 }

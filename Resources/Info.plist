@@ -8,6 +8,8 @@
 	<string>NetMonitor</string>
 	<key>CFBundleExecutable</key>
 	<string>NetMonitor</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.netmonitor.NetMonitor</string>
 	<key>CFBundleInfoDictionaryVersion</key>

@@ -563,6 +563,14 @@ struct CustomEndpointEditor: View {
                 Picker("响应格式", selection: $endpoint.kind) {
                     ForEach(ResponseKind.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
+                .onChange(of: endpoint.kind) { kind in
+                    // 不同格式的字段写法不同，切换时换成该格式的默认值
+                    switch kind {
+                    case .json: endpoint.fields = FieldMap(ip: "ip", countryCode: "country_code")
+                    case .keyValue: endpoint.fields = FieldMap(ip: "ip", countryCode: "loc")
+                    case .text, .plainIP: endpoint.fields = FieldMap()
+                    }
+                }
                 Picker("编码", selection: $endpoint.encoding) {
                     Text("UTF-8").tag(TextEncoding.utf8)
                     Text("GBK").tag(TextEncoding.gbk)
@@ -581,10 +589,15 @@ struct CustomEndpointEditor: View {
                             field("成功标志值", \.successValue)
                         }
                     } header: {
-                        Text(endpoint.kind == .json ? "字段路径（点分，如 data.ip、data.location.0）" : "键名")
+                        Text(fieldsHeader)
+                    } footer: {
+                        if endpoint.kind == .text {
+                            Text("例：响应为 “45.78.60.129 JP” 时全部留空即可；响应为 “ip=1.2.3.4 country=JP” 时，国家码填 country=(\\w+)。")
+                                .font(.caption).foregroundColor(.secondary)
+                        }
                     }
                 } else {
-                    Text("纯文本 IP 接口不返回归属地，将用 ipwho.is 按 IP 补全。")
+                    Text("取响应第一行的第一段作为 IP；后面若跟着两位国家码（如 “45.78.60.129 JP”）会自动识别。其余归属地用 ipwho.is 按 IP 补全。")
                         .font(.caption).foregroundColor(.secondary)
                 }
             }
@@ -616,6 +629,15 @@ struct CustomEndpointEditor: View {
         }
         .padding(20)
         .frame(width: 520, height: 620)
+    }
+
+    private var fieldsHeader: String {
+        switch endpoint.kind {
+        case .json: return "字段路径（点分，如 data.ip、data.location.0）"
+        case .keyValue: return "键名"
+        case .text: return "正则表达式（取第 1 个捕获组；IP 和国家码留空则自动识别）"
+        case .plainIP: return ""
+        }
     }
 
     private func field(_ title: String, _ keyPath: WritableKeyPath<FieldMap, String?>) -> some View {

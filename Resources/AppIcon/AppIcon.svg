@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#21598a"/>
+      <stop offset="1" stop-color="#0d2741"/>
+    </linearGradient>
+    <clipPath id="globeClip"><circle cx="470" cy="470" r="262"/></clipPath>
+  </defs>
+  <!-- macOS 图标网格：824×824 圆角方形 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" ry="185" fill="url(#bg)"/>
+  <!-- 地球：经纬线 -->
+  <g fill="none" stroke="#ffffff" stroke-linecap="round">
+    <g clip-path="url(#globeClip)" stroke-width="22" opacity="0.92">
+      <line x1="200" y1="470" x2="740" y2="470"/>
+      <path d="M232 340 Q470 395 708 340"/>
+      <path d="M232 600 Q470 545 708 600"/>
+      <ellipse cx="470" cy="470" rx="118" ry="262"/>
+      <line x1="470" y1="200" x2="470" y2="740"/>
+    </g>
+    <circle cx="470" cy="470" r="262" stroke-width="34"/>
+  </g>
+  <!-- 校验徽章：出口符合预期 -->
+  <circle cx="724" cy="724" r="150" fill="#2fbf71" stroke="#123352" stroke-width="30"/>
+  <path d="M654 726 L705 777 L800 676" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

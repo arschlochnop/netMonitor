@@ -1,3 +1,5 @@
+<p align="center"><img src="Resources/AppIcon/AppIcon-1024.png" width="128" alt="NetMonitor 图标"></p>
+
 # NetMonitor
 
 macOS 菜单栏工具：同时向多个境内、境外的 IP 查询接口发请求，检查每条出口的公网 IP 是否符合预期地区或关键字，不符合时通知或弹窗提醒。
@@ -18,17 +20,67 @@ macOS 菜单栏工具：同时向多个境内、境外的 IP 查询接口发请�
 
 ## 安装
 
-需要 macOS 13 或更高版本。
+需要 macOS 13 或更高版本，Apple 芯片和 Intel 芯片都支持。
 
-1. 从 GitHub Actions 的构建产物或 Releases 下载 `NetMonitor-*.zip`，解压得到 `NetMonitor.app`，拖到“应用程序”。
-2. 构建产物只做了临时签名，没有经过 Apple 公证，首次打开会被拦截。在终端执行一次：
+> **为什么会被系统拦截**：安装包只做了临时签名，没有经过 Apple 公证（公证需要付费的 Apple 开发者账号）。从网上下载的 App 会被系统打上“隔离”标记，第一次打开时提示 “Apple 无法验证 NetMonitor 是否包含恶意软件”。这不代表程序有问题，按下面任一方法放行一次即可，之后正常打开。源代码全部公开，介意的话可以[从源码构建](#从源码构建)。
+
+### 第 1 步：下载
+
+任选一处：
+
+- **Releases 页面**（推荐，无需登录）：在仓库右侧的 Releases 里下载最新的 `NetMonitor-版本号.zip`。
+- **Actions 构建产物**（每次提交都会生成，需要登录 GitHub）：打开仓库的 Actions 页面，点开最近一次成功的 CI，在页面底部 Artifacts 处下载 `NetMonitor`。下载到的是一个 zip，里面还套着一个 `NetMonitor-*.zip`，需要解压两次。
+
+### 第 2 步：安装并放行
+
+**方法 A：一键安装脚本（推荐）**
+
+在终端执行，脚本会自动找到“下载”文件夹里最新的安装包，解压、复制到“应用程序”、解除隔离标记并启动：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arschlochnop/netMonitor/main/scripts/install.sh | bash
+```
+
+安装包不在“下载”文件夹时，把路径传给脚本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arschlochnop/netMonitor/main/scripts/install.sh | bash -s -- ~/Desktop/NetMonitor.zip
+```
+
+**方法 B：手动安装 + 终端放行**
+
+1. 双击 zip 解压（Actions 产物要解压两次），得到 `NetMonitor.app`。
+2. 把 `NetMonitor.app` 拖进“应用程序”文件夹。
+3. 在终端执行：
 
    ```bash
    xattr -dr com.apple.quarantine /Applications/NetMonitor.app
    ```
 
-   或者在“系统设置 › 隐私与安全性”里点“仍要打开”。
-3. 首次运行会请求通知权限。拒绝的话，不符合时改用置顶弹窗提醒。
+4. 双击打开。
+
+**方法 C：手动安装 + 系统设置放行**（不用终端）
+
+1. 解压并拖进“应用程序”，双击打开，出现拦截提示后点“完成”。
+2. 打开“系统设置 › 隐私与安全性”，滚到底部“安全性”一栏，会看到“已阻止使用 NetMonitor”。
+3. 点“仍要打开”，输入登录密码，再在弹出的确认框里点“仍要打开”。
+
+> 在较新的 macOS 上，右键选“打开”已经不能绕过这个提示，只能用上面的方法。
+
+### 第 3 步：首次运行
+
+- NetMonitor 没有 Dock 图标和主窗口，打开后只在**菜单栏右上角**出现一个地球图标，点它查看各检测点状态。
+- 第一次运行会请求**通知权限**，请点“允许”。拒绝的话，不符合时改用置顶弹窗提醒；之后可以在“系统设置 › 通知 › NetMonitor”里重新打开。
+- 想开机自动运行：菜单栏图标 › 设置… › 通用 › 勾选“登录时自动启动”。
+
+### 升级与卸载
+
+- **升级**：用同样的方法安装新版本覆盖即可，配置和历史记录会保留。一键脚本会先退出正在运行的旧版本。
+- **卸载**：退出 NetMonitor，删除 `/Applications/NetMonitor.app`。如需同时删除配置和历史：
+
+  ```bash
+  rm -rf ~/Library/Application\ Support/NetMonitor
+  ```
 
 ## 从源码构建
 
