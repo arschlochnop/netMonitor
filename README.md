@@ -75,7 +75,8 @@ curl -fsSL https://raw.githubusercontent.com/arschlochnop/netMonitor/HEAD/script
 
 ### 升级与卸载
 
-- **升级**：用同样的方法安装新版本覆盖即可，配置和历史记录会保留。一键脚本会先退出正在运行的旧版本。
+- **自动更新**：程序每 6 小时检查一次 GitHub Releases，有新版本时菜单里会出现“有新版本，立即更新”。点击后自动下载、核对 SHA-256、替换并重启。在“设置 › 更新”中可以手动检查、跳过某个版本，或开启“自动下载并安装”。自动更新需要仓库公开且已发布 Release。
+- **手动升级**：用同样的方法安装新版本覆盖即可，配置和历史记录会保留。一键脚本会先退出正在运行的旧版本。
 - **卸载**：退出 NetMonitor，删除 `/Applications/NetMonitor.app`。如需同时删除配置和历史：
 
   ```bash
@@ -95,6 +96,18 @@ scripts/build-app.sh 0.1.0
 ```
 
 产物在 `build/NetMonitor.app`。也可以 `swift run NetMonitor` 直接运行调试，但这种方式没有 Bundle ID，系统通知和开机启动不可用。
+
+## 发布新版本
+
+推送 `v` 开头的标签即可，CI 会编译、打包并创建 Release，附上安装包和 `.sha256` 校验文件：
+
+```bash
+git tag v0.2.0
+```
+
+```bash
+git push origin v0.2.0
+```
 
 ## 配置与数据
 

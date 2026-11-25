@@ -24,5 +24,6 @@ plutil -lint "$APP/Contents/Info.plist"
 codesign --force --deep --sign - "$APP"
 codesign --verify --verbose "$APP"
 
-(cd "$OUT" && rm -f "NetMonitor-$VERSION.zip" && ditto -c -k --keepParent NetMonitor.app "NetMonitor-$VERSION.zip")
-echo "已生成 $APP 与 $OUT/NetMonitor-$VERSION.zip"
+(cd "$OUT" && rm -f "NetMonitor-$VERSION.zip" && ditto -c -k --keepParent NetMonitor.app "NetMonitor-$VERSION.zip" \
+  && shasum -a 256 "NetMonitor-$VERSION.zip" > "NetMonitor-$VERSION.zip.sha256")
+echo "已生成 $APP、$OUT/NetMonitor-$VERSION.zip 及其 SHA-256 校验文件"

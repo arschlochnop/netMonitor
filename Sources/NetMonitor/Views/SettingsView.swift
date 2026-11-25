@@ -15,6 +15,8 @@ struct SettingsView: View {
                 .tabItem { Label("通用", systemImage: "gearshape") }
             EndpointsSettingsView()
                 .tabItem { Label("查询接口", systemImage: "list.bullet") }
+            UpdateSettingsView(updater: monitor.updater)
+                .tabItem { Label("更新", systemImage: "arrow.down.circle") }
         }
         .padding(12)
         .frame(minWidth: 820, minHeight: 600)
@@ -643,5 +645,85 @@ struct CustomEndpointEditor: View {
             get: { endpoint.fields[keyPath: keyPath] ?? "" },
             set: { endpoint.fields[keyPath: keyPath] = $0.isEmpty ? nil : $0 }
         ))
+    }
+}
+
+// MARK: - 更新
+
+@MainActor
+struct UpdateSettingsView: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        Form {
+            Section("版本") {
+                LabeledContent("当前版本", value: Updater.currentVersionString)
+                LabeledContent("最新版本") {
+                    Text(updater.latest.map { $0.version?.description ?? $0.tagName } ?? "—")
+                }
+                if let date = updater.lastChecked {
+                    LabeledContent("上次检查", value: Format.dateTime.string(from: date))
+                }
+                HStack {
+                    Button("检查更新") { Task { await updater.check(userInitiated: true) } }
+                        .disabled(updater.state == .checking || updater.state == .downloading || updater.state == .installing)
+                    if updater.state == .checking { ProgressView().controlSize(.small) }
+                    Spacer()
+                    Text(statusText).foregroundColor(statusColor)
+                }
+            }
+
+            if case .available(let release) = updater.state {
+                Section("新版本 \(release.version?.description ?? release.tagName)") {
+                    if let body = release.body, !body.isEmpty {
+                        ScrollView {
+                            Text(body).font(.callout).textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 160)
+                    }
+                    HStack {
+                        Button("下载并安装") { Task { await updater.downloadAndInstall(release) } }
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(!updater.canInstall)
+                        Button("跳过此版本") { updater.skip(release) }
+                        Button("在 GitHub 查看") { NSWorkspace.shared.open(release.htmlURL) }
+                    }
+                    if !updater.canInstall {
+                        Text("当前不是以 .app 方式运行，请到 GitHub 手动下载。").font(.caption).foregroundColor(.secondary)
+                    }
+                }
+            }
+
+            Section("自动更新") {
+                Toggle("自动检查更新（每 6 小时）", isOn: $updater.autoCheck)
+                Toggle("发现新版本后自动下载并安装", isOn: $updater.autoInstall)
+                    .disabled(!updater.autoCheck)
+                Text("更新来自 GitHub Releases（\(Updater.repository)）。安装前会核对 SHA-256 校验值、Bundle ID 和版本号，校验不通过不会安装。安装时程序会自动退出并重新打开。")
+                    .font(.caption).foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var statusText: String {
+        switch updater.state {
+        case .idle: return ""
+        case .checking: return "正在检查…"
+        case .upToDate: return "已是最新版本"
+        case .available: return "有新版本可用"
+        case .downloading: return "正在下载…"
+        case .installing: return "正在安装，即将重启…"
+        case .failed(let message): return message
+        }
+    }
+
+    private var statusColor: Color {
+        switch updater.state {
+        case .failed: return ProbeStatus.mismatch.color
+        case .available: return .accentColor
+        case .upToDate: return ProbeStatus.ok.color
+        default: return .secondary
+        }
     }
 }

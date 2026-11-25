@@ -30,6 +30,7 @@ final class Monitor: ObservableObject {
 
     let notifier: Notifier
     let popup: PopupController
+    let updater: Updater
     let configURL: URL
     private let historyFile: HistoryFile
     private var timer: Timer?
@@ -44,6 +45,7 @@ final class Monitor: ObservableObject {
     init() {
         notifier = Notifier()
         popup = PopupController()
+        updater = Updater()
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("NetMonitor", isDirectory: true)
         configURL = support.appendingPathComponent("config.json")
@@ -82,6 +84,11 @@ final class Monitor: ObservableObject {
             if let id { self?.muteProbe(id, for: 3600) } else { self?.mute(for: 3600) }
         }
         notifier.setup()
+
+        updater.onNotify = { [weak self] title, body in
+            self?.notifier.post(title: title, body: body, probeID: nil, sound: false, actionable: false)
+        }
+        updater.start()
 
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }

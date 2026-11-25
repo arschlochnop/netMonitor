@@ -171,3 +171,51 @@ final class LimitsTests: XCTestCase {
         XCTAssertEqual(outcome.geo?.countryCode, "JP", "命中缓存时不应再请求补全服务（假网络层没有该地址）")
     }
 }
+
+final class UpdateTests: XCTestCase {
+    func testVersionOrdering() {
+        let v = { SemanticVersion($0)! }
+        XCTAssertLessThan(v("0.1.0"), v("0.2.0"))
+        XCTAssertLessThan(v("v0.9.9"), v("1.0"))
+        XCTAssertLessThan(v("0.1.0-dev"), v("0.1.0"))
+        XCTAssertLessThan(v("1.0.0-beta.2"), v("1.0.0-beta.10"))
+        XCTAssertEqual(v("v1.2"), v("1.2.0"))
+        XCTAssertNil(SemanticVersion("latest"))
+    }
+
+    private func release(tag: String, assets: [String], prerelease: Bool = false) throws -> GitHubRelease {
+        let assetJSON = assets.map {
+            #"{"name":"\#($0)","size":1,"browser_download_url":"https://github.com/o/r/releases/download/\#(tag)/\#($0)"}"#
+        }.joined(separator: ",")
+        let json = #"{"tag_name":"\#(tag)","name":"\#(tag)","body":"notes","html_url":"https://github.com/o/r/releases/tag/\#(tag)","draft":false,"prerelease":\#(prerelease),"published_at":"2026-11-25T10:00:00Z","assets":[\#(assetJSON)]}"#
+        return try GitHubRelease.decode(Data(json.utf8))
+    }
+
+    func testDecideAvailable() throws {
+        let r = try release(tag: "v0.2.0", assets: ["NetMonitor-0.2.0.zip", "NetMonitor-0.2.0.zip.sha256"])
+        XCTAssertEqual(r.packageAsset?.name, "NetMonitor-0.2.0.zip")
+        XCTAssertEqual(r.checksumAsset?.name, "NetMonitor-0.2.0.zip.sha256")
+        XCTAssertEqual(UpdatePolicy.decide(current: SemanticVersion("0.1.0-dev")!, release: r, skippedVersion: nil),
+                       .available(SemanticVersion("0.2.0")!))
+        XCTAssertEqual(UpdatePolicy.decide(current: SemanticVersion("0.2.0")!, release: r, skippedVersion: nil), .upToDate)
+        XCTAssertEqual(UpdatePolicy.decide(current: SemanticVersion("0.1.0")!, release: r, skippedVersion: "0.2.0"),
+                       .skipped(SemanticVersion("0.2.0")!))
+    }
+
+    func testDecideRejectsPrereleaseAndMissingPackage() throws {
+        let pre = try release(tag: "v0.3.0", assets: ["NetMonitor-0.3.0.zip"], prerelease: true)
+        guard case .unusable = UpdatePolicy.decide(current: SemanticVersion("0.1.0")!, release: pre, skippedVersion: nil) else {
+            return XCTFail("预发布版本不应提示更新")
+        }
+        let empty = try release(tag: "v0.3.0", assets: [])
+        guard case .unusable = UpdatePolicy.decide(current: SemanticVersion("0.1.0")!, release: empty, skippedVersion: nil) else {
+            return XCTFail("没有安装包时不应提示更新")
+        }
+    }
+
+    func testParseChecksum() {
+        let sum = String(repeating: "ab", count: 32)
+        XCTAssertEqual(UpdatePolicy.parseChecksum("\(sum)  NetMonitor-0.2.0.zip\n"), sum)
+        XCTAssertNil(UpdatePolicy.parseChecksum("not a checksum"))
+    }
+}

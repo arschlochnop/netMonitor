@@ -111,6 +111,7 @@ struct MenuContentView: View {
                 monitor.setAllPaused(!monitor.config.allPaused)
             }
             Divider().padding(.vertical, 4).padding(.horizontal, 10)
+            UpdateMenuRow(updater: monitor.updater)
             MenuRowButton(title: "历史记录…", shortcut: "⌘Y") { WindowManager.shared.showHistory() }
                 .keyboardShortcut("y")
             MenuRowButton(title: "设置…", shortcut: "⌘,") { WindowManager.shared.showSettings() }
@@ -246,6 +247,34 @@ struct ProbeRow: View {
             return nil
         case .paused:
             return nil
+        }
+    }
+}
+
+/// 有新版本时在菜单里显示一行
+@MainActor
+struct UpdateMenuRow: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        switch updater.state {
+        case .available(let release):
+            MenuRowButton(title: "有新版本 \(release.version?.description ?? release.tagName)，立即更新") {
+                if updater.canInstall {
+                    Task { await updater.downloadAndInstall(release) }
+                } else {
+                    NSWorkspace.shared.open(release.htmlURL)
+                }
+            }
+            .foregroundColor(.accentColor)
+        case .downloading:
+            Text("正在下载更新…").foregroundColor(.secondary).padding(.horizontal, 10).frame(height: 26)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case .installing:
+            Text("正在安装更新，即将重启…").foregroundColor(.secondary).padding(.horizontal, 10).frame(height: 26)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        default:
+            EmptyView()
         }
     }
 }
