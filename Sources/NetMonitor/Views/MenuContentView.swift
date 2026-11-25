@@ -49,12 +49,12 @@ struct MenuContentView: View {
     }
 
     private var summary: (text: String, color: Color) {
-        if monitor.config.allPaused { return ("已暂停全部检测", .secondary) }
+        if monitor.config.allPaused { return ("已暂停全部检测", Color.secondary) }
         let statuses = monitor.config.probes.map(monitor.displayStatus(of:))
         let mismatch = statuses.filter { $0 == .mismatch }.count
         let failed = statuses.filter { $0 == .failed }.count
         if mismatch == 0 && failed == 0 {
-            return monitor.config.probes.isEmpty ? ("还没有检测点", .secondary) : ("全部正常", ProbeStatus.ok.color)
+            return monitor.config.probes.isEmpty ? ("还没有检测点", Color.secondary) : ("全部正常", ProbeStatus.ok.color)
         }
         var parts: [String] = []
         if mismatch > 0 { parts.append("\(mismatch) 项不符合") }
@@ -241,7 +241,7 @@ struct ProbeRow: View {
             return nil
         case .ok:
             if outcome.geo == nil {
-                return (outcome.noIPv6 ? "本机无 IPv6 出口，按设置视为正常" : "检测失败，按设置视为正常", .secondary)
+                return (outcome.noIPv6 ? "本机无 IPv6 出口，按设置视为正常" : "检测失败，按设置视为正常", Color.secondary)
             }
             return nil
         case .paused:

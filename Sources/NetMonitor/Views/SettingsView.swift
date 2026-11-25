@@ -374,12 +374,7 @@ struct GeneralSettingsView: View {
                     Text("从不").tag(Int?.none)
                     ForEach([3, 5, 10], id: \.self) { Text("连续 \($0) 次后").tag(Int?.some($0)) }
                 }
-                LabeledContent("通知权限") {
-                    HStack {
-                        Text(monitor.notifier.statusText)
-                        Button("打开系统设置") { monitor.notifier.openSystemSettings() }
-                    }
-                }
+                NotificationStatusRow(notifier: monitor.notifier)
             }
 
             Section("菜单栏") {
@@ -439,6 +434,21 @@ struct GeneralSettingsView: View {
             message = "已导出到 \(url.path)"
         } catch {
             message = "导出失败：\(error.localizedDescription)"
+        }
+    }
+}
+
+/// 单独观察 Notifier，授权状态变化时刷新
+@MainActor
+struct NotificationStatusRow: View {
+    @ObservedObject var notifier: Notifier
+
+    var body: some View {
+        LabeledContent("通知权限") {
+            HStack {
+                Text(notifier.statusText)
+                Button("打开系统设置") { notifier.openSystemSettings() }
+            }
         }
     }
 }

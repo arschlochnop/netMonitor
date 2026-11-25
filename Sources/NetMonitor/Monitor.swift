@@ -28,8 +28,8 @@ final class Monitor: ObservableObject {
     @Published var selectedProbeID: UUID?
     @Published private(set) var lastError: String?
 
-    let notifier = Notifier()
-    let popup = PopupController()
+    let notifier: Notifier
+    let popup: PopupController
     let configURL: URL
     private let historyFile: HistoryFile
     private var timer: Timer?
@@ -41,6 +41,8 @@ final class Monitor: ObservableObject {
     private var lastPrune = Date.distantPast
 
     init() {
+        notifier = Notifier()
+        popup = PopupController()
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("NetMonitor", isDirectory: true)
         configURL = support.appendingPathComponent("config.json")

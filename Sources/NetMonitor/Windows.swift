@@ -62,7 +62,11 @@ final class PopupModel: ObservableObject {
 @MainActor
 final class PopupController {
     private var panel: NSPanel?
-    private let model = PopupModel()
+    private let model: PopupModel
+
+    init() {
+        model = PopupModel()
+    }
 
     func show(items: [PopupItem], onMute: @escaping () -> Void, onSettings: @escaping () -> Void) {
         guard !items.isEmpty else { return }

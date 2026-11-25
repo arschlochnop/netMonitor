@@ -1,6 +1,6 @@
 import Foundation
 
-public enum ParseError: Error, Equatable, Sendable {
+public enum ParseError: Error, Hashable, Sendable {
     case emptyBody
     case invalidJSON
     case unsuccessful(String)

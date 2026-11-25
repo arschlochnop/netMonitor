@@ -69,7 +69,7 @@ struct MenuRowButton: View {
     var title: String
     var shortcut: String?
     var action: () -> Void
-    @State private var hovering = false
+    @State var hovering = false
 
     var body: some View {
         Button(action: action) {
