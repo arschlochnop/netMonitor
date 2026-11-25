@@ -42,11 +42,7 @@
 | `icanhazip-v6` | `https://ipv6.icanhazip.com` | 境外 |
 | `ipify-v64` | `https://api64.ipify.org` | 境外（双栈，优先 v6） |
 
-测试机自身有无 IPv6 可以先确认：
-
-```bash
-curl -6 -sS -m 5 https://v6.ident.me
-```
+测试机执行 `curl -6 https://v6.ident.me` 同样报“无法解析域名”。curl 在本机没有可用 IPv6 地址、或 DNS 不返回 IPv6 记录（如代理工具的 DNS 关闭了 IPv6）时都会这样报，所以**测试机当前没有可用的 IPv6 出口**，IPv6 接口只能等有 IPv6 的网络再测。
 
 境内暂无可用的 IPv6 候选。IPv6 检测点 MVP 先只提供境外接口。
 
