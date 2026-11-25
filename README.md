@@ -6,6 +6,35 @@ macOS 菜单栏工具：同时向多个境内、境外的 IP 查询接口发请�
 
 适合开着代理 / 分流规则的场景：访问不同国家的网站会走不同出口，任何一条出口漂移、掉线回落直连、IPv6 泄漏都能及时发现。
 
+## 截图
+
+<table>
+  <tr>
+    <td width="45%" valign="top">
+      <img src="docs/screenshots/menu.png" alt="菜单栏面板：国内、海外、IPv6 三个检测点全部正常">
+      <p align="center"><b>菜单栏一眼看全</b><br>每条出口的 IP、归属地、运营商和状态，图标旁直接显示当前出口国家码</p>
+    </td>
+    <td width="55%" valign="top">
+      <img src="docs/screenshots/alert-popup.png" alt="强提醒弹窗：国内视角出口变成日本">
+      <p align="center"><b>出口漂移立即弹窗</b><br>国内流量走到了日本节点，弹窗写明是哪条规则没通过</p>
+      <img src="docs/screenshots/recovered-notification.png" alt="恢复通知：异常持续 36 秒">
+      <p align="center"><b>恢复也会通知</b><br>并告诉你这次异常持续了多久</p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="docs/screenshots/probe-settings.png" alt="检测点设置：查询接口、备用接口和预期规则">
+      <p align="center"><b>每个检测点 = 查询接口 + 预期规则</b><br>主接口失败自动回退备用接口，规则可按国家码、运营商、ASN、关键字或正则组合</p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="docs/screenshots/endpoints.png" alt="内置查询接口列表">
+      <p align="center"><b>内置境内、境外、IPv6 查询接口</b><br>每个都能一键测试，也可以添加自建接口</p>
+    </td>
+  </tr>
+</table>
+
 ## 功能
 
 - **检测点**：一个检测点 = 一个查询接口 + 一组预期规则。查询接口决定请求走哪条出口，主接口失败时按顺序回退到备用接口。
