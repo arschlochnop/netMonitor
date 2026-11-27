@@ -5,14 +5,16 @@ import SwiftUI
 @MainActor
 struct NetMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var monitor = Monitor.shared
+    /// 不订阅 Monitor：否则任何状态变化都会让整个菜单栏场景重算
+    private let monitor = Monitor.shared
 
     var body: some Scene {
         MenuBarExtra {
             MenuContentView()
                 .environmentObject(monitor)
+                .environmentObject(monitor.live)
         } label: {
-            Image(nsImage: StatusIcon.image(status: monitor.overallStatus, text: monitor.menuBarText))
+            MenuBarLabel(live: monitor.live)
         }
         .menuBarExtraStyle(.window)
     }
@@ -28,5 +30,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         Monitor.shared.saveNow()
+    }
+}
+
+/// 菜单栏图标：只订阅整体状态和图标旁文字
+@MainActor
+struct MenuBarLabel: View {
+    @ObservedObject var live: LiveState
+
+    var body: some View {
+        Image(nsImage: StatusIcon.image(status: live.overall, text: live.menuBarText))
     }
 }

@@ -25,6 +25,19 @@ struct SettingsView: View {
 
 // MARK: - 检测点
 
+/// 列表里的状态圆点：单独订阅 LiveState，状态变化时只重绘圆点
+@MainActor
+struct LiveStatusDot: View {
+    var probeID: UUID
+    @EnvironmentObject var live: LiveState
+
+    var body: some View {
+        Circle()
+            .fill((live.snapshots[probeID]?.status ?? .pending).color)
+            .frame(width: 9, height: 9)
+    }
+}
+
 @MainActor
 struct ProbesSettingsView: View {
     @EnvironmentObject var monitor: Monitor
@@ -35,7 +48,7 @@ struct ProbesSettingsView: View {
                 List(selection: $monitor.selectedProbeID) {
                     ForEach(monitor.config.probes) { probe in
                         HStack(spacing: 8) {
-                            Circle().fill(monitor.displayStatus(of: probe).color).frame(width: 9, height: 9)
+                            LiveStatusDot(probeID: probe.id)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(probe.name)
                                 Text(subtitle(probe)).font(.caption).foregroundColor(.secondary)

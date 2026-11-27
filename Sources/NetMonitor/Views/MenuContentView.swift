@@ -3,21 +3,23 @@ import NetMonitorCore
 import SwiftUI
 
 /// 菜单栏下拉面板
+///
+/// 性能要点：检测状态来自 LiveState（只在内容变化时发布），检测时间由每行自己的
+/// TimelineView 按 5 秒刷新，不会因为每秒一次的检测而重排整个面板。
 @MainActor
 struct MenuContentView: View {
     @EnvironmentObject var monitor: Monitor
+    @EnvironmentObject var live: LiveState
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 5)) { context in
-            VStack(spacing: 0) {
-                header
-                Divider()
-                probeList(now: context.date)
-                Divider()
-                footer
-            }
-            .frame(width: 380)
+        VStack(spacing: 0) {
+            header
+            Divider()
+            probeList
+            Divider()
+            footer
         }
+        .frame(width: 380)
     }
 
     // MARK: 头部
@@ -50,7 +52,7 @@ struct MenuContentView: View {
 
     private var summary: (text: String, color: Color) {
         if monitor.config.allPaused { return ("已暂停全部检测", Color.secondary) }
-        let statuses = monitor.config.probes.map(monitor.displayStatus(of:))
+        let statuses = monitor.config.probes.compactMap { live.snapshots[$0.id]?.status }
         let mismatch = statuses.filter { $0 == .mismatch }.count
         let failed = statuses.filter { $0 == .failed }.count
         if mismatch == 0 && failed == 0 {
@@ -65,10 +67,10 @@ struct MenuContentView: View {
     // MARK: 列表
 
     @ViewBuilder
-    private func probeList(now: Date) -> some View {
+    private var probeList: some View {
         let rows = VStack(spacing: 2) {
             ForEach(monitor.config.probes) { probe in
-                ProbeRow(probe: probe, now: now)
+                ProbeRow(probe: probe, snapshot: live.snapshots[probe.id])
             }
             if monitor.config.probes.isEmpty {
                 Button("添加检测点…") { WindowManager.shared.showSettings() }
@@ -136,13 +138,11 @@ struct MenuContentView: View {
 @MainActor
 struct ProbeRow: View {
     var probe: Probe
-    var now: Date
+    var snapshot: ProbeSnapshot?
     @EnvironmentObject var monitor: Monitor
     @State private var expandedByUser: Bool?
 
-    private var runtime: ProbeRuntime? { monitor.runtimes[probe.id] }
-    private var status: ProbeStatus { monitor.displayStatus(of: probe) }
-    private var outcome: CheckOutcome? { runtime?.lastOutcome }
+    private var status: ProbeStatus { snapshot?.status ?? (probe.enabled ? .pending : .paused) }
     private var expanded: Bool { expandedByUser ?? (status == .mismatch) }
 
     var body: some View {
@@ -153,23 +153,24 @@ struct ProbeRow: View {
                     Text(probe.name).font(.system(size: 13, weight: .semibold))
                     if let group = monitor.endpoint(for: probe)?.group { Tag(text: group.title) }
                     Spacer()
-                    Text(timeText).font(.system(size: 11)).foregroundColor(.secondary)
+                    CheckTimeText(probeID: probe.id, paused: status == .paused)
                 }
                 HStack(spacing: 6) {
-                    Text(ipText).font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
-                    if let cc = outcome?.geo?.countryCode { CountryBadge(code: cc) }
-                    if let line = outcome?.geo?.locationLine, !line.isEmpty {
+                    Text(snapshot?.ipText ?? "—").font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
+                    if let cc = snapshot?.countryCode { CountryBadge(code: cc) }
+                    if let line = snapshot?.locationLine, !line.isEmpty {
                         Text(line).font(.system(size: 12)).foregroundColor(.secondary).lineLimit(1)
                     }
                 }
-                if let note {
-                    Text(note.text)
+                if let note = snapshot?.note {
+                    let isMismatch = snapshot?.noteStyle == .mismatch
+                    Text(note)
                         .font(.system(size: 12))
-                        .foregroundColor(note.color)
-                        .padding(.horizontal, status == .mismatch ? 6 : 0)
-                        .padding(.vertical, status == .mismatch ? 3 : 0)
+                        .foregroundColor(noteColor)
+                        .padding(.horizontal, isMismatch ? 6 : 0)
+                        .padding(.vertical, isMismatch ? 3 : 0)
                         .background(RoundedRectangle(cornerRadius: 5)
-                            .fill(status == .mismatch ? ProbeStatus.mismatch.color.opacity(0.12) : .clear))
+                            .fill(isMismatch ? ProbeStatus.mismatch.color.opacity(0.12) : .clear))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if expanded { actions }
@@ -183,9 +184,17 @@ struct ProbeRow: View {
         .contextMenu { menuItems }
     }
 
+    private var noteColor: Color {
+        switch snapshot?.noteStyle {
+        case .mismatch?: return ProbeStatus.mismatch.color
+        case .warning?: return ProbeStatus.failed.color
+        default: return .secondary
+        }
+    }
+
     private var actions: some View {
         HStack(spacing: 6) {
-            Button("复制 IP") { copyIP() }.disabled(outcome?.geo == nil)
+            Button("复制 IP") { copyIP() }.disabled(snapshot?.ip == nil)
             Button("立即检测") { monitor.checkNow(probe.id) }
             Button("静音 1 小时") { monitor.muteProbe(probe.id, for: 3600) }
             Button("编辑…") { WindowManager.shared.showSettings(probeID: probe.id) }
@@ -196,58 +205,39 @@ struct ProbeRow: View {
 
     @ViewBuilder
     private var menuItems: some View {
-        Button("复制 IP") { copyIP() }.disabled(outcome?.geo == nil)
+        Button("复制 IP") { copyIP() }.disabled(snapshot?.ip == nil)
         Button("立即检测") { monitor.checkNow(probe.id) }
         Button("静音 1 小时") { monitor.muteProbe(probe.id, for: 3600) }
         Button("编辑…") { WindowManager.shared.showSettings(probeID: probe.id) }
     }
 
     private func copyIP() {
-        guard let ip = outcome?.geo?.ip else { return }
+        guard let ip = snapshot?.ip else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(ip, forType: .string)
     }
+}
 
-    private var timeText: String {
-        if runtime?.checking == true { return "检测中…" }
-        if status == .paused { return "已暂停" }
-        guard let date = outcome?.date else { return "等待检测" }
-        return Format.ago(date, now: now)
-    }
+/// “x 秒前”：自己按 5 秒刷新，只重绘这一小段文字
+@MainActor
+struct CheckTimeText: View {
+    var probeID: UUID
+    var paused: Bool
+    @EnvironmentObject var monitor: Monitor
 
-    private var ipText: String {
-        if let ip = outcome?.geo?.ip { return ip }
-        if outcome?.noIPv6 == true { return "无 IPv6" }
-        if let ip = runtime?.alert.lastIP { return "上次 \(ip)" }
-        return "—"
-    }
-
-    private var note: (text: String, color: Color)? {
-        guard let outcome else { return nil }
-        switch status {
-        case .mismatch:
-            let failures = outcome.evaluation?.failures.map(\.explanation).joined(separator: "；")
-            if let failures, !failures.isEmpty {
-                let count = runtime?.alert.consecutiveMismatch ?? 0
-                return ("未通过：\(failures)（连续 \(count) 次）", ProbeStatus.mismatch.color)
-            }
-            return ("检测失败，上次结果不符合：\(outcome.failureSummary)", ProbeStatus.mismatch.color)
-        case .failed:
-            return ("检测失败：\(outcome.failureSummary)", ProbeStatus.failed.color)
-        case .pending:
-            if outcome.status == .mismatch {
-                let n = runtime?.alert.consecutiveMismatch ?? 0
-                return ("不符合，等待确认（\(n)/\(probe.alert.debounce)）", ProbeStatus.failed.color)
-            }
-            return nil
-        case .ok:
-            if outcome.geo == nil {
-                return (outcome.noIPv6 ? "本机无 IPv6 出口，按设置视为正常" : "检测失败，按设置视为正常", Color.secondary)
-            }
-            return nil
-        case .paused:
-            return nil
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            Text(text(now: context.date))
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+                .monospacedDigit()
         }
+    }
+
+    private func text(now: Date) -> String {
+        if paused { return "已暂停" }
+        guard let date = monitor.lastCheckDate(probeID) else { return "等待检测" }
+        return Format.ago(date, now: now)
     }
 }
 

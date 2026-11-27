@@ -14,13 +14,16 @@ final class WindowManager {
     func showSettings(probeID: UUID? = nil) {
         if let probeID { Monitor.shared.selectedProbeID = probeID }
         show(id: "settings", title: "NetMonitor 设置", size: NSSize(width: 880, height: 660)) {
-            SettingsView().environmentObject(Monitor.shared)
+            SettingsView()
+                .environmentObject(Monitor.shared)
+                .environmentObject(Monitor.shared.live)
         }
     }
 
     func showHistory() {
         show(id: "history", title: "历史记录", size: NSSize(width: 980, height: 620)) {
-            HistoryView().environmentObject(Monitor.shared)
+            HistoryView(store: Monitor.shared.historyStore)
+                .environmentObject(Monitor.shared)
         }
     }
 
@@ -131,9 +134,22 @@ enum LoginItem {
 
 // MARK: - 菜单栏图标
 
+@MainActor
 enum StatusIcon {
     /// 生成模板图：随菜单栏深浅色自动反色。状态靠图形区分，不依赖颜色。
+    private static var cache: [String: NSImage] = [:]
+
+    /// 同一状态和文字只生成一次
     static func image(status: ProbeStatus, text: String?) -> NSImage {
+        let key = "\(status.rawValue)|\(text ?? "")"
+        if let cached = cache[key] { return cached }
+        let image = makeImage(status: status, text: text)
+        if cache.count > 64 { cache.removeAll() }
+        cache[key] = image
+        return image
+    }
+
+    private static func makeImage(status: ProbeStatus, text: String?) -> NSImage {
         let symbolName: String
         switch status {
         case .ok, .pending: symbolName = "globe"

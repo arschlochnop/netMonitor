@@ -20,10 +20,15 @@ final class Monitor: ObservableObject {
     @Published var config: AppConfig {
         didSet { configChanged(from: oldValue) }
     }
-    @Published private(set) var runtimes: [UUID: ProbeRuntime] = [:]
-    @Published private(set) var history: [HistoryEvent] = []
+    /// 调度用的运行状态，每次检测都会变，刻意不发布；界面通过 `live` 订阅
+    private(set) var runtimes: [UUID: ProbeRuntime] = [:]
     @Published private(set) var mutedUntil: Date?
-    @Published private(set) var supportsIPv6: Bool?
+    /// 只在调度时读取，不需要触发界面更新
+    private(set) var supportsIPv6: Bool?
+    /// 菜单栏界面状态（低频）
+    let live: LiveState
+    /// 历史事件（只有历史窗口订阅）
+    let historyStore: HistoryStore
     /// 设置窗口中选中的检测点
     @Published var selectedProbeID: UUID?
     @Published private(set) var lastError: String?
@@ -46,6 +51,8 @@ final class Monitor: ObservableObject {
         notifier = Notifier()
         popup = PopupController()
         updater = Updater()
+        live = LiveState()
+        historyStore = HistoryStore()
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("NetMonitor", isDirectory: true)
         configURL = support.appendingPathComponent("config.json")
@@ -69,6 +76,7 @@ final class Monitor: ObservableObject {
         config = loaded
         lastError = loadError
         selectedProbeID = loaded.probes.first?.id
+        publishLive()
     }
 
     // MARK: - 启动
@@ -208,6 +216,7 @@ final class Monitor: ObservableObject {
         // 唤醒宽限期内的失败不计入
         if outcome.status == .failed, let graceUntil, outcome.date < graceUntil {
             runtimes[probe.id] = rt
+            publishLive()
             return
         }
 
@@ -226,6 +235,7 @@ final class Monitor: ObservableObject {
             location: outcome.geo.map(locationText), now: outcome.date, settings: settings
         )
         runtimes[probe.id] = rt
+        publishLive()
 
         for event in events {
             record(event, probe: probe, outcome: outcome, before: previousDescription, after: current)
@@ -255,7 +265,7 @@ final class Monitor: ObservableObject {
             item = nil
         }
         guard let item else { return }
-        history.append(item)
+        historyStore.events.append(item)
         do {
             try historyFile.append(item)
         } catch {
@@ -365,6 +375,66 @@ final class Monitor: ObservableObject {
         return runtimes[probe.id]?.alert.displayStatus ?? .pending
     }
 
+    // MARK: - 界面状态
+
+    /// 重新计算菜单栏界面状态；LiveState 只在值变化时才通知界面
+    func publishLive() {
+        var snapshots: [UUID: ProbeSnapshot] = [:]
+        for probe in config.probes { snapshots[probe.id] = snapshot(of: probe) }
+        live.update(snapshots: snapshots, overall: overallStatus, menuBarText: menuBarText)
+    }
+
+    private func snapshot(of probe: Probe) -> ProbeSnapshot {
+        let status = displayStatus(of: probe)
+        let rt = runtimes[probe.id]
+        let outcome = rt?.lastOutcome
+        let geo = outcome?.geo
+
+        let ipText: String
+        if let ip = geo?.ip {
+            ipText = ip
+        } else if outcome?.noIPv6 == true {
+            ipText = "无 IPv6"
+        } else if let ip = rt?.alert.lastIP {
+            ipText = "上次 \(ip)"
+        } else {
+            ipText = "—"
+        }
+
+        var note: String?
+        var style = ProbeSnapshot.NoteStyle.secondary
+        if let outcome {
+            switch status {
+            case .mismatch:
+                style = .mismatch
+                let failures = outcome.evaluation?.failures.map(\.explanation).joined(separator: "；") ?? ""
+                note = failures.isEmpty ? "检测失败，上次结果不符合：\(outcome.failureSummary)" : "未通过：\(failures)"
+            case .failed:
+                style = .warning
+                note = "检测失败：\(outcome.failureSummary)"
+            case .pending:
+                if outcome.status == .mismatch {
+                    style = .warning
+                    note = "不符合，等待确认（\(rt?.alert.consecutiveMismatch ?? 0)/\(probe.alert.debounce)）"
+                }
+            case .ok:
+                if geo == nil {
+                    note = outcome.noIPv6 ? "本机无 IPv6 出口，按设置视为正常" : "检测失败，按设置视为正常"
+                }
+            case .paused:
+                break
+            }
+        }
+
+        return ProbeSnapshot(
+            status: status, ip: geo?.ip, ipText: ipText, countryCode: geo?.countryCode,
+            locationLine: geo?.locationLine ?? "", note: note, noteStyle: style
+        )
+    }
+
+    /// 最近一次检测时间（不发布，界面按自己的节奏读取）
+    func lastCheckDate(_ id: UUID) -> Date? { runtimes[id]?.lastOutcome?.date }
+
     var overallStatus: ProbeStatus {
         let statuses = config.probes.map(displayStatus(of:))
         if statuses.isEmpty || statuses.allSatisfy({ $0 == .paused }) { return .paused }
@@ -399,6 +469,7 @@ final class Monitor: ObservableObject {
 
     private func configChanged(from old: AppConfig) {
         scheduleSave()
+        defer { publishLive() }
         let oldByID = Dictionary(old.probes.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let currentIDs = Set(config.probes.map(\.id))
         for id in runtimes.keys where !currentIDs.contains(id) { runtimes[id] = nil }
@@ -432,7 +503,7 @@ final class Monitor: ObservableObject {
     func importConfig(from url: URL) throws {
         let imported = try ConfigStore.load(from: url)
         runtimes = [:]
-        config = imported
+        config = imported.sanitized()
         selectedProbeID = config.probes.first?.id
         checkAll()
     }
@@ -447,9 +518,9 @@ final class Monitor: ObservableObject {
         lastPrune = Date()
         let cutoff = Date().addingTimeInterval(-TimeInterval(config.historyRetentionDays) * 86400)
         do {
-            history = try historyFile.prune(olderThan: cutoff)
+            historyStore.events = try historyFile.prune(olderThan: cutoff)
         } catch {
-            history = historyFile.load().filter { $0.date >= cutoff }
+            historyStore.events = historyFile.load().filter { $0.date >= cutoff }
         }
     }
 

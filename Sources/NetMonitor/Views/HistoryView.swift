@@ -5,14 +5,16 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct HistoryView: View {
+    /// 只订阅历史事件；检测本身不会触发这个窗口重算
+    @ObservedObject var store: HistoryStore
     @EnvironmentObject var monitor: Monitor
     @State private var probeFilter: UUID?
     @State private var range: TimeInterval = 86400
     @State private var abnormalOnly = false
 
-    private var filtered: [HistoryEvent] {
+    private func filtered() -> [HistoryEvent] {
         let cutoff = Date().addingTimeInterval(-range)
-        return monitor.history
+        return store.events
             .filter { $0.date >= cutoff }
             .filter { probeFilter == nil || $0.probeID == probeFilter }
             .filter { !abnormalOnly || $0.kind.isAbnormal }
@@ -20,7 +22,9 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        // 每次构建只过滤、排序一次，统计和表格共用
+        let rows = filtered()
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Picker("检测点", selection: $probeFilter) {
                     Text("全部检测点").tag(UUID?.none)
@@ -40,13 +44,13 @@ struct HistoryView: View {
             }
 
             HStack(spacing: 12) {
-                stat("不符合", filtered.filter { $0.kind == .mismatch }.count.description)
-                stat("检测失败", filtered.filter { $0.kind == .failed }.count.description)
-                stat("IP 变化", filtered.filter { $0.kind == .ipChanged }.count.description)
-                stat("最长一次异常", filtered.compactMap(\.duration).max().map(Format.duration) ?? "—")
+                stat("不符合", rows.filter { $0.kind == .mismatch }.count.description)
+                stat("检测失败", rows.filter { $0.kind == .failed }.count.description)
+                stat("IP 变化", rows.filter { $0.kind == .ipChanged }.count.description)
+                stat("最长一次异常", rows.compactMap(\.duration).max().map(Format.duration) ?? "—")
             }
 
-            Table(filtered) {
+            Table(rows) {
                 TableColumn("时间") { e in
                     Text(Format.dateTime.string(from: e.date)).monospacedDigit().foregroundColor(.secondary)
                 }
@@ -97,7 +101,7 @@ struct HistoryView: View {
         panel.nameFieldStringValue = "netmonitor-history.csv"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         // 带 BOM，Excel 打开中文不乱码
-        let data = Data([0xEF, 0xBB, 0xBF]) + Data(HistoryFile.csv(filtered).utf8)
+        let data = Data([0xEF, 0xBB, 0xBF]) + Data(HistoryFile.csv(filtered()).utf8)
         try? data.write(to: url)
     }
 }
